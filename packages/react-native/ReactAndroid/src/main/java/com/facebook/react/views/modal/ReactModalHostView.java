@@ -19,11 +19,15 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStructure;
 import android.view.Window;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.FrameLayout;
+
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
+import androidx.core.view.WindowInsetsCompat;
+
 import com.facebook.common.logging.FLog;
 import com.facebook.infer.annotation.Assertions;
 import com.facebook.react.R;
@@ -46,6 +50,7 @@ import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.events.EventDispatcher;
 import com.facebook.react.views.common.ContextUtils;
 import com.facebook.react.views.view.ReactViewGroup;
+
 import java.util.ArrayList;
 
 /**
@@ -64,7 +69,7 @@ import java.util.ArrayList;
  * </ol>
  */
 public class ReactModalHostView extends ViewGroup
-    implements LifecycleEventListener, FabricViewStateManager.HasFabricViewStateManager {
+  implements LifecycleEventListener, FabricViewStateManager.HasFabricViewStateManager {
 
   private static final String TAG = "ReactModalHost";
 
@@ -170,7 +175,7 @@ public class ReactModalHostView extends ViewGroup
     if (mDialog != null) {
       if (mDialog.isShowing()) {
         Activity dialogContext =
-            ContextUtils.findContextOfType(mDialog.getContext(), Activity.class);
+          ContextUtils.findContextOfType(mDialog.getContext(), Activity.class);
         if (dialogContext == null || !dialogContext.isFinishing()) {
           mDialog.dismiss();
         }
@@ -256,11 +261,11 @@ public class ReactModalHostView extends ViewGroup
       Context dialogContext = ContextUtils.findContextOfType(mDialog.getContext(), Activity.class);
       // TODO(T85755791): remove after investigation
       FLog.e(
-          TAG,
-          "Updating existing dialog with context: "
-              + dialogContext
-              + "@"
-              + dialogContext.hashCode());
+        TAG,
+        "Updating existing dialog with context: "
+          + dialogContext
+          + "@"
+          + dialogContext.hashCode());
 
       if (mPropertyRequiresNewDialog) {
         dismiss();
@@ -282,10 +287,10 @@ public class ReactModalHostView extends ViewGroup
     Context context = currentActivity == null ? getContext() : currentActivity;
     mDialog = new Dialog(context, theme);
     mDialog
-        .getWindow()
-        .setFlags(
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+      .getWindow()
+      .setFlags(
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
 
     // TODO(T85755791): remove after investigation
     FLog.e(TAG, "Creating new dialog from context: " + context + "@" + context.hashCode());
@@ -295,33 +300,33 @@ public class ReactModalHostView extends ViewGroup
 
     mDialog.setOnShowListener(mOnShowListener);
     mDialog.setOnKeyListener(
-        new DialogInterface.OnKeyListener() {
-          @Override
-          public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
-            if (event.getAction() == KeyEvent.ACTION_UP) {
-              // We need to stop the BACK button and ESCAPE key from closing the dialog by default
-              // so we capture that event and instead inform JS so that it can make the decision as
-              // to whether or not to allow the back/escape key to close the dialog. If it chooses
-              // to, it can just set visible to false on the Modal and the Modal will go away
-              if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
-                Assertions.assertNotNull(
-                    mOnRequestCloseListener,
-                    "setOnRequestCloseListener must be called by the manager");
-                mOnRequestCloseListener.onRequestClose(dialog);
-                return true;
-              } else {
-                // We redirect the rest of the key events to the current activity, since the
-                // activity expects to receive those events and react to them, ie. in the case of
-                // the dev menu
-                Activity currentActivity = ((ReactContext) getContext()).getCurrentActivity();
-                if (currentActivity != null) {
-                  return currentActivity.onKeyUp(keyCode, event);
-                }
+      new DialogInterface.OnKeyListener() {
+        @Override
+        public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
+          if (event.getAction() == KeyEvent.ACTION_UP) {
+            // We need to stop the BACK button and ESCAPE key from closing the dialog by default
+            // so we capture that event and instead inform JS so that it can make the decision as
+            // to whether or not to allow the back/escape key to close the dialog. If it chooses
+            // to, it can just set visible to false on the Modal and the Modal will go away
+            if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+              Assertions.assertNotNull(
+                mOnRequestCloseListener,
+                "setOnRequestCloseListener must be called by the manager");
+              mOnRequestCloseListener.onRequestClose(dialog);
+              return true;
+            } else {
+              // We redirect the rest of the key events to the current activity, since the
+              // activity expects to receive those events and react to them, ie. in the case of
+              // the dev menu
+              Activity currentActivity = ((ReactContext) getContext()).getCurrentActivity();
+              if (currentActivity != null) {
+                return currentActivity.onKeyUp(keyCode, event);
               }
             }
-            return false;
           }
-        });
+          return false;
+        }
+      });
 
     mDialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
     if (mHardwareAccelerated) {
@@ -331,15 +336,39 @@ public class ReactModalHostView extends ViewGroup
       mDialog.show();
       if (context instanceof Activity) {
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) {
-          int appearance =
-              ((Activity) context).getWindow().getInsetsController().getSystemBarsAppearance();
-          mDialog.getWindow().getInsetsController().setSystemBarsAppearance(appearance, appearance);
+          Window window = ((Activity) context).getWindow();
+          WindowInsetsController windowInsetsController = window.getInsetsController();
+          WindowInsetsController dialogWindowInsetsController = mDialog.getWindow().getInsetsController();
+
+          int appearance = windowInsetsController.getSystemBarsAppearance();
+          dialogWindowInsetsController.setSystemBarsAppearance(appearance, appearance);
+
+          boolean statusBarsIsVisible = window.getDecorView().getRootWindowInsets().isVisible(WindowInsetsCompat.Type.statusBars());
+          if (statusBarsIsVisible) {
+            dialogWindowInsetsController.show(WindowInsetsCompat.Type.statusBars());
+          } else {
+            dialogWindowInsetsController.hide(WindowInsetsCompat.Type.statusBars());
+          }
+
+          boolean navigationBarsIsVisible = window.getDecorView().getRootWindowInsets().isVisible(WindowInsetsCompat.Type.navigationBars());
+          if (navigationBarsIsVisible) {
+            dialogWindowInsetsController.show(WindowInsetsCompat.Type.navigationBars());
+          } else {
+            dialogWindowInsetsController.hide(WindowInsetsCompat.Type.navigationBars());
+          }
+
+          boolean captionBarIsVisible = window.getDecorView().getRootWindowInsets().isVisible(WindowInsetsCompat.Type.captionBar());
+          if (captionBarIsVisible) {
+            dialogWindowInsetsController.show(WindowInsetsCompat.Type.captionBar());
+          } else {
+            dialogWindowInsetsController.hide(WindowInsetsCompat.Type.captionBar());
+          }
         } else {
           mDialog
-              .getWindow()
-              .getDecorView()
-              .setSystemUiVisibility(
-                  ((Activity) context).getWindow().getDecorView().getSystemUiVisibility());
+            .getWindow()
+            .getDecorView()
+            .setSystemUiVisibility(
+              ((Activity) context).getWindow().getDecorView().getSystemUiVisibility());
         }
       }
       mDialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
@@ -391,7 +420,7 @@ public class ReactModalHostView extends ViewGroup
     } else {
       window.setDimAmount(0.5f);
       window.setFlags(
-          WindowManager.LayoutParams.FLAG_DIM_BEHIND, WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        WindowManager.LayoutParams.FLAG_DIM_BEHIND, WindowManager.LayoutParams.FLAG_DIM_BEHIND);
     }
   }
 
@@ -416,7 +445,7 @@ public class ReactModalHostView extends ViewGroup
    * UIManagerModule, and will then cause the children to layout as if they can fill the window.
    */
   static class DialogRootViewGroup extends ReactViewGroup
-      implements RootView, FabricViewStateManager.HasFabricViewStateManager {
+    implements RootView, FabricViewStateManager.HasFabricViewStateManager {
     private boolean hasAdjustedSize = false;
     private int viewWidth;
     private int viewHeight;
@@ -425,7 +454,8 @@ public class ReactModalHostView extends ViewGroup
     private final FabricViewStateManager mFabricViewStateManager = new FabricViewStateManager();
 
     private final JSTouchDispatcher mJSTouchDispatcher = new JSTouchDispatcher(this);
-    @Nullable private JSPointerDispatcher mJSPointerDispatcher;
+    @Nullable
+    private JSPointerDispatcher mJSPointerDispatcher;
 
     public DialogRootViewGroup(Context context) {
       super(context);
@@ -457,21 +487,21 @@ public class ReactModalHostView extends ViewGroup
           // TODO: T44725185 remove after full migration to Fabric
           ReactContext reactContext = getReactContext();
           reactContext.runOnNativeModulesQueueThread(
-              new GuardedRunnable(reactContext) {
-                @Override
-                public void runGuarded() {
-                  UIManagerModule uiManager =
-                      getReactContext()
-                          .getReactApplicationContext()
-                          .getNativeModule(UIManagerModule.class);
+            new GuardedRunnable(reactContext) {
+              @Override
+              public void runGuarded() {
+                UIManagerModule uiManager =
+                  getReactContext()
+                    .getReactApplicationContext()
+                    .getNativeModule(UIManagerModule.class);
 
-                  if (uiManager == null) {
-                    return;
-                  }
-
-                  uiManager.updateNodeSize(viewTag, viewWidth, viewHeight);
+                if (uiManager == null) {
+                  return;
                 }
-              });
+
+                uiManager.updateNodeSize(viewTag, viewWidth, viewHeight);
+              }
+            });
         }
       } else {
         hasAdjustedSize = true;
@@ -489,28 +519,28 @@ public class ReactModalHostView extends ViewGroup
       if (currentState != null) {
         float delta = (float) 0.9;
         float stateScreenHeight =
-            currentState.hasKey("screenHeight")
-                ? (float) currentState.getDouble("screenHeight")
-                : 0;
+          currentState.hasKey("screenHeight")
+            ? (float) currentState.getDouble("screenHeight")
+            : 0;
         float stateScreenWidth =
-            currentState.hasKey("screenWidth") ? (float) currentState.getDouble("screenWidth") : 0;
+          currentState.hasKey("screenWidth") ? (float) currentState.getDouble("screenWidth") : 0;
 
         if (Math.abs(stateScreenWidth - realWidth) < delta
-            && Math.abs(stateScreenHeight - realHeight) < delta) {
+          && Math.abs(stateScreenHeight - realHeight) < delta) {
           return;
         }
       }
 
       mFabricViewStateManager.setState(
-          new FabricViewStateManager.StateUpdateCallback() {
-            @Override
-            public WritableMap getStateUpdate() {
-              WritableMap map = new WritableNativeMap();
-              map.putDouble("screenWidth", realWidth);
-              map.putDouble("screenHeight", realHeight);
-              return map;
-            }
-          });
+        new FabricViewStateManager.StateUpdateCallback() {
+          @Override
+          public WritableMap getStateUpdate() {
+            WritableMap map = new WritableNativeMap();
+            map.putDouble("screenWidth", realWidth);
+            map.putDouble("screenHeight", realHeight);
+            return map;
+          }
+        });
     }
 
     @Override
